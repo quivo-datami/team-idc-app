@@ -1,15 +1,17 @@
-name: Sync upstream tag and open PR
+name: Sync upstream release and open PR
 
 on:
-  push:
-    tags:
-      - "*"
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours
+  workflow_dispatch:
 
 env:
+  UPSTREAM_OWNER: aws-samples/iam-identity-center-team
+  UPSTREAM_REPO: quivo-datami/team-idc-app
   BASE_BRANCH: main
 
 jobs:
-  sync-tag:
+  sync-upstream-release:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,30 +21,42 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
 
-      - name: Extract tag name
-        id: tag
+      - name: Get latest upstream release tag
+        id: upstream
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          TAG=$(curl -s \
+            https://api.github.com/repos/${UPSTREAM_OWNER}/${UPSTREAM_REPO}/releases/latest \
+            | jq -r .tag_name)
+
+          if [ "$TAG" = "null" ] || [ -z "$TAG" ]; then
+            echo "No upstream release found"
+            exit 0
+          fi
+
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Check if branch already exists
+      - name: Check if tag already exists locally
         id: check
         run: |
-          BRANCH="upstream/${{ steps.tag.outputs.tag }}"
-
-          if git ls-remote --exit-code --heads origin "$BRANCH"; then
+          if git rev-parse "refs/tags/${{ steps.upstream.outputs.tag }}" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create branch from tag
+      - name: Add upstream remote
         if: steps.check.outputs.exists == 'false'
         run: |
-          TAG=${{ steps.tag.outputs.tag }}
+          git remote add upstream https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git
+          git fetch upstream --tags
+
+      - name: Create branch from upstream tag
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          TAG=${{ steps.upstream.outputs.tag }}
           BRANCH=upstream/${TAG}
 
-          git checkout -b "$BRANCH" "$TAG"
+          git checkout -b "$BRANCH" "refs/tags/$TAG"
           git push origin "$BRANCH"
 
       - name: Create Pull Request
@@ -50,11 +64,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
         run: |
-          TAG=${{ steps.tag.outputs.tag }}
+          TAG=${{ steps.upstream.outputs.tag }}
           BRANCH=upstream/${TAG}
 
           gh pr create \
             --base "${BASE_BRANCH}" \
             --head "$BRANCH" \
-            --title "Sync upstream tag ${TAG}" \
-            --body "Automated PR created from tag **${TAG}**"
+            --title "Sync upstream release ${TAG}" \
+            --body "Automated PR syncing upstream release **${TAG}** from ${UPSTREAM_OWNER}/${UPSTREAM_REPO}"
