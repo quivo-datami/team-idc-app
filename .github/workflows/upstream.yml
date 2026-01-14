@@ -12,6 +12,8 @@ permissions:
 
 env:
   BASE_BRANCH: main
+  UPSTREAM_OWNER: aws-samples/iam-identity-center-team
+  UPSTREAM_REPO: quivo-datami/team-idc-app
 
 jobs:
   sync-tag:
@@ -23,11 +25,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git || true
+          git fetch upstream --tags
+
       - name: Extract tag name
         id: tag
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag exists in upstream
+        run: |
+          TAG=${{ steps.tag.outputs.tag }}
+
+          if ! git show-ref --tags --verify --quiet "refs/tags/$TAG"; then
+            echo "Tag $TAG not found in upstream"
+            exit 1
+          fi
 
       - name: Check if branch already exists
         id: check
@@ -40,13 +56,13 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create branch from tag
+      - name: Create branch from upstream tag
         if: steps.check.outputs.exists == 'false'
         run: |
           TAG=${{ steps.tag.outputs.tag }}
           BRANCH=upstream/${TAG}
 
-          git checkout -b "$BRANCH" "$TAG"
+          git checkout -b "$BRANCH" "refs/tags/$TAG"
           git push origin "$BRANCH"
 
       - name: Create Pull Request
@@ -61,4 +77,4 @@ jobs:
             --base "${BASE_BRANCH}" \
             --head "$BRANCH" \
             --title "Sync upstream tag ${TAG}" \
-            --body "Automated PR created from tag **${TAG}**"
+            --body "Automated PR syncing upstream tag **${TAG}** from ${UPSTREAM_OWNER}/${UPSTREAM_REPO}"
