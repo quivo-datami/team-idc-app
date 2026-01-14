@@ -1,0 +1,60 @@
+name: Sync upstream tag and open PR
+
+on:
+  push:
+    tags:
+      - "*"
+
+env:
+  BASE_BRANCH: main
+
+jobs:
+  sync-tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+
+      - name: Extract tag name
+        id: tag
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Check if branch already exists
+        id: check
+        run: |
+          BRANCH="upstream/${{ steps.tag.outputs.tag }}"
+
+          if git ls-remote --exit-code --heads origin "$BRANCH"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create branch from tag
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          TAG=${{ steps.tag.outputs.tag }}
+          BRANCH=upstream/${TAG}
+
+          git checkout -b "$BRANCH" "$TAG"
+          git push origin "$BRANCH"
+
+      - name: Create Pull Request
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+        run: |
+          TAG=${{ steps.tag.outputs.tag }}
+          BRANCH=upstream/${TAG}
+
+          gh pr create \
+            --base "${BASE_BRANCH}" \
+            --head "$BRANCH" \
+            --title "Sync upstream tag ${TAG}" \
+            --body "Automated PR created from tag **${TAG}**"
