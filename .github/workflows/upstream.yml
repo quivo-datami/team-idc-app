@@ -1,4 +1,4 @@
-name: Upstream process
+name: Upstream process (force PR)
 
 on:
   push:
@@ -20,26 +20,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      #  Checkout your repository
+      # 1️⃣ Checkout your repository
       - name: Checkout target repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      #  Configure git identity for commits
+      # 2️⃣ Configure git identity
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # Add upstream remote and fetch tags
+      # 3️⃣ Add upstream remote and fetch tags
       - name: Add upstream remote
         run: |
           git remote add upstream https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git || true
           git fetch upstream --tags
 
-      # Determine the tag to sync
-      - name: Resolve tag to use
+      # 4️⃣ Determine the tag to sync
+      - name: Resolve tag
         id: tag
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
@@ -57,7 +57,7 @@ jobs:
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      #  Get upstream tag commit SHA
+      # 5️⃣ Get commit SHA of upstream tag
       - name: Get upstream tag commit SHA
         id: upstream_commit
         run: |
@@ -69,7 +69,7 @@ jobs:
           fi
           echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
 
-      # Check if branch already exists
+      # 6️⃣ Check if branch exists
       - name: Check if branch exists
         id: check
         run: |
@@ -80,8 +80,8 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      #  Create branch from main and cherry-pick upstream commit with auto-resolve
-      - name: Create branch and cherry-pick upstream commit
+      # 7️⃣ Create branch from main and merge upstream tag commit (force PR)
+      - name: Create branch and merge upstream tag
         if: steps.check.outputs.exists == 'false'
         run: |
           TAG=${{ steps.tag.outputs.tag }}
@@ -89,44 +89,31 @@ jobs:
           BRANCH="upstream/${TAG}"
 
           git checkout origin/${BASE_BRANCH} -b "$BRANCH"
-          # auto-resolve conflicts by favoring upstream changes
-          git cherry-pick "$COMMIT" -X theirs || true
+          # Force a merge commit even if already applied
+          git merge "$COMMIT" --allow-unrelated-histories -m "Sync upstream tag ${TAG}"
 
-      #  Restore local workflows to avoid push restrictions
-      - name: Restore local workflows from main
+      # 8️⃣ Restore workflows to prevent push errors
+      - name: Restore workflows
         if: steps.check.outputs.exists == 'false'
         run: |
           git checkout origin/${BASE_BRANCH} -- .github/workflows || true
 
-      # 9️⃣ Commit restored workflows if any
+      # 9️⃣ Commit restored workflows if needed
       - name: Commit restored workflows
         if: steps.check.outputs.exists == 'false'
         run: |
           git add .github/workflows
           git commit -m "Restore local workflows from ${BASE_BRANCH}" || true
 
-      #  Check for new commits after cherry-pick
-      - name: Check for new commits
-        id: has_commits
+      # 🔟 Push branch
+      - name: Push branch
         if: steps.check.outputs.exists == 'false'
         run: |
-          NEW_COMMITS=$(git log origin/${BASE_BRANCH}..HEAD --oneline)
-          if [ -z "$NEW_COMMITS" ]; then
-            echo "no_new_commits=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "no_new_commits=false" >> "$GITHUB_OUTPUT"
-          fi
+          git push origin "upstream/${TAG}" --force
 
-      #  Push branch to origin if commits exist
-      - name: Push branch
-        if: steps.check.outputs.exists == 'false' && steps.has_commits.outputs.no_new_commits == 'false'
-        run: |
-          TAG=${{ steps.tag.outputs.tag }}
-          git push origin "upstream/${TAG}"
-
-      #  Create Pull Request if commits exist
+      # 1️⃣1️⃣ Create Pull Request
       - name: Create Pull Request
-        if: steps.check.outputs.exists == 'false' && steps.has_commits.outputs.no_new_commits == 'false'
+        if: steps.check.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.UPSTREAM_SECRET }}
         run: |
