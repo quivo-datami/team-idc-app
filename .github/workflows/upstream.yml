@@ -20,25 +20,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout your repository
+      #  Checkout your repository
       - name: Checkout target repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Configure git identity for commits
+      #  Configure git identity for commits
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # 3️⃣ Add upstream remote and fetch tags
+      # Add upstream remote and fetch tags
       - name: Add upstream remote
         run: |
           git remote add upstream https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git || true
           git fetch upstream --tags
 
-      # 4️⃣ Determine the tag to sync
+      # Determine the tag to sync
       - name: Resolve tag to use
         id: tag
         run: |
@@ -57,7 +57,7 @@ jobs:
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      # 5️⃣ Get upstream tag commit SHA
+      #  Get upstream tag commit SHA
       - name: Get upstream tag commit SHA
         id: upstream_commit
         run: |
@@ -69,7 +69,7 @@ jobs:
           fi
           echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
 
-      # 6️⃣ Check if branch already exists
+      # Check if branch already exists
       - name: Check if branch exists
         id: check
         run: |
@@ -80,7 +80,7 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # 7️⃣ Create branch from main and cherry-pick upstream commit
+      #  Create branch from main and cherry-pick upstream commit with auto-resolve
       - name: Create branch and cherry-pick upstream commit
         if: steps.check.outputs.exists == 'false'
         run: |
@@ -92,7 +92,7 @@ jobs:
           # auto-resolve conflicts by favoring upstream changes
           git cherry-pick "$COMMIT" -X theirs || true
 
-      # 8️⃣ Restore local workflows to avoid push restrictions
+      #  Restore local workflows to avoid push restrictions
       - name: Restore local workflows from main
         if: steps.check.outputs.exists == 'false'
         run: |
@@ -105,7 +105,7 @@ jobs:
           git add .github/workflows
           git commit -m "Restore local workflows from ${BASE_BRANCH}" || true
 
-      # 🔟 Check for new commits after cherry-pick
+      #  Check for new commits after cherry-pick
       - name: Check for new commits
         id: has_commits
         if: steps.check.outputs.exists == 'false'
@@ -117,14 +117,14 @@ jobs:
             echo "no_new_commits=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # 1️⃣1️⃣ Push branch to origin if commits exist
+      #  Push branch to origin if commits exist
       - name: Push branch
         if: steps.check.outputs.exists == 'false' && steps.has_commits.outputs.no_new_commits == 'false'
         run: |
           TAG=${{ steps.tag.outputs.tag }}
           git push origin "upstream/${TAG}"
 
-      # 1️⃣2️⃣ Create Pull Request if commits exist
+      #  Create Pull Request if commits exist
       - name: Create Pull Request
         if: steps.check.outputs.exists == 'false' && steps.has_commits.outputs.no_new_commits == 'false'
         env:
