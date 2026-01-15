@@ -55,9 +55,10 @@ jobs:
             exit 1
           fi
 
+          echo "Resolved tag is: $TAG"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      # 5️⃣ Get commit SHA of upstream tag
+      # 5️⃣ Get upstream tag commit SHA
       - name: Get upstream tag commit SHA
         id: upstream_commit
         run: |
@@ -88,9 +89,9 @@ jobs:
           COMMIT=${{ steps.upstream_commit.outputs.commit_sha }}
           BRANCH="upstream/${TAG}"
 
+          echo "Creating branch $BRANCH from main and merging upstream tag commit $COMMIT"
           git checkout origin/${BASE_BRANCH} -b "$BRANCH"
-          # Force a merge commit even if already applied
-          git merge "$COMMIT" --allow-unrelated-histories -m "Sync upstream tag ${TAG}"
+          git merge "$COMMIT" --allow-unrelated-histories -m "Sync upstream tag ${TAG}" || true
 
       # 8️⃣ Restore workflows to prevent push errors
       - name: Restore workflows
@@ -105,10 +106,12 @@ jobs:
           git add .github/workflows
           git commit -m "Restore local workflows from ${BASE_BRANCH}" || true
 
-      # 🔟 Push branch
+      # 🔟 Push branch (force)
       - name: Push branch
         if: steps.check.outputs.exists == 'false'
         run: |
+          TAG=${{ steps.tag.outputs.tag }}
+          echo "Pushing branch upstream/${TAG} to origin"
           git push origin "upstream/${TAG}" --force
 
       # 1️⃣1️⃣ Create Pull Request
@@ -118,6 +121,7 @@ jobs:
           GH_TOKEN: ${{ secrets.UPSTREAM_SECRET }}
         run: |
           TAG=${{ steps.tag.outputs.tag }}
+          echo "Creating PR for branch upstream/${TAG}"
           gh pr create \
             --base "${BASE_BRANCH}" \
             --head "upstream/${TAG}" \
