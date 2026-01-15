@@ -3,7 +3,7 @@ name: Sync upstream tag and open PR
 on:
   push:
     tags:
-      - "*"
+      - "latest"
   workflow_dispatch:
 
 permissions:
