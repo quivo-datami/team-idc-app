@@ -16,11 +16,11 @@ env:
   UPSTREAM_REPO: iam-identity-center-team
 
 jobs:
-  sync-tag:
+  upstream:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout your repo
+      # 1️⃣ Checkout your repository
       - name: Checkout target repo
         uses: actions/checkout@v4
         with:
@@ -33,12 +33,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       # 3️⃣ Add upstream remote and fetch tags
-      - name: Add upstream remote and fetch tags
+      - name: Add upstream remote
         run: |
           git remote add upstream https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git || true
           git fetch upstream --tags
 
-      # 4️⃣ Resolve tag to use
+      # 4️⃣ Determine the tag to sync
       - name: Resolve tag to use
         id: tag
         run: |
@@ -80,7 +80,7 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # 7️⃣ Create branch from main and cherry-pick upstream tag commit
+      # 7️⃣ Create branch from main and cherry-pick upstream commit
       - name: Create branch and cherry-pick upstream commit
         if: steps.check.outputs.exists == 'false'
         run: |
@@ -89,7 +89,8 @@ jobs:
           BRANCH="upstream/${TAG}"
 
           git checkout origin/${BASE_BRANCH} -b "$BRANCH"
-          git cherry-pick "$COMMIT" || true  # trivial conflicts ignored
+          # auto-resolve conflicts by favoring upstream changes
+          git cherry-pick "$COMMIT" -X theirs || true
 
       # 8️⃣ Restore local workflows to avoid push restrictions
       - name: Restore local workflows from main
@@ -97,14 +98,14 @@ jobs:
         run: |
           git checkout origin/${BASE_BRANCH} -- .github/workflows || true
 
-      # 9️⃣ Commit restored workflows (if needed)
+      # 9️⃣ Commit restored workflows if any
       - name: Commit restored workflows
         if: steps.check.outputs.exists == 'false'
         run: |
           git add .github/workflows
           git commit -m "Restore local workflows from ${BASE_BRANCH}" || true
 
-      # 🔟 Check if there are new commits to push
+      # 🔟 Check for new commits after cherry-pick
       - name: Check for new commits
         id: has_commits
         if: steps.check.outputs.exists == 'false'
@@ -116,7 +117,7 @@ jobs:
             echo "no_new_commits=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # 1️⃣1️⃣ Push branch to origin if there are commits
+      # 1️⃣1️⃣ Push branch to origin if commits exist
       - name: Push branch
         if: steps.check.outputs.exists == 'false' && steps.has_commits.outputs.no_new_commits == 'false'
         run: |
