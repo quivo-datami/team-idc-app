@@ -20,13 +20,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout the repo
+      # 1️⃣ Checkout your repo
       - name: Checkout target repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Configure Git identity for commits
+      # 2️⃣ Configure git identity for commits
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
@@ -38,7 +38,7 @@ jobs:
           git remote add upstream https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git || true
           git fetch upstream --tags
 
-      # 4️⃣ Extract tag name from push or pick latest v* tag
+      # 4️⃣ Resolve tag to use
       - name: Resolve tag to use
         id: tag
         run: |
@@ -57,11 +57,17 @@ jobs:
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      # 5️⃣ Verify tag exists in upstream
-      - name: Verify tag exists in upstream
+      # 5️⃣ Get commit SHA of upstream tag
+      - name: Get upstream tag commit
+        id: upstream_commit
         run: |
           TAG=${{ steps.tag.outputs.tag }}
-          git show-ref --tags --verify --quiet "refs/tags/$TAG"
+          COMMIT_SHA=$(git rev-parse "refs/remotes/upstream/${TAG}")
+          if [ -z "$COMMIT_SHA" ]; then
+            echo "Commit for upstream tag $TAG not found"
+            exit 1
+          fi
+          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
 
       # 6️⃣ Check if branch already exists
       - name: Check if branch exists
@@ -74,15 +80,18 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # 7️⃣ Create branch from upstream tag
-      - name: Create branch from upstream tag
+      # 7️⃣ Create branch from main and cherry-pick upstream tag commit
+      - name: Create branch and cherry-pick upstream commit
         if: steps.check.outputs.exists == 'false'
         run: |
           TAG=${{ steps.tag.outputs.tag }}
+          COMMIT=${{ steps.upstream_commit.outputs.commit_sha }}
           BRANCH="upstream/${TAG}"
-          git checkout -b "$BRANCH" "refs/tags/$TAG"
 
-      # 8️⃣ Restore local workflows to prevent GitHub push errors
+          git checkout origin/${BASE_BRANCH} -b "$BRANCH"
+          git cherry-pick "$COMMIT" || true   # in case of conflicts, can adjust
+
+      # 8️⃣ Restore local workflows to prevent push errors
       - name: Restore local workflows from main
         if: steps.check.outputs.exists == 'false'
         run: |
@@ -106,7 +115,7 @@ jobs:
       - name: Create Pull Request
         if: steps.check.outputs.exists == 'false'
         env:
-          GH_TOKEN: ${{ secrets.UPSTREAM_SECRET }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=${{ steps.tag.outputs.tag }}
           gh pr create \
