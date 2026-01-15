@@ -25,25 +25,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Add upstream remote and fetch tags
         run: |
           git remote add upstream https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git || true
           git fetch upstream --tags
 
-      - name: Resolve tag to use (push or manual)
+      - name: Extract tag name
         id: tag
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-          else
-            TAG=$(git tag -l 'v*' --sort=-v:refname | head -n 1)
-          fi
-
-          if [ -z "$TAG" ]; then
-            echo "No v* tags found"
-            exit 1
-          fi
-
+          TAG="${GITHUB_REF#refs/tags/}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Verify tag exists in upstream
@@ -55,7 +50,6 @@ jobs:
         id: check
         run: |
           BRANCH="upstream/${{ steps.tag.outputs.tag }}"
-
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
@@ -66,28 +60,37 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         run: |
           TAG=${{ steps.tag.outputs.tag }}
-          git checkout -b "upstream/${TAG}" "refs/tags/$TAG"
+          BRANCH="upstream/${TAG}"
 
-      # 🔐 SAFE WORKFLOW RESTORE (key fix)
+          git checkout -b "$BRANCH" "refs/tags/$TAG"
+
+      # 🔒 CRITICAL SECURITY STEP (prevents workflow permission error)
       - name: Restore local workflows from main
         if: steps.check.outputs.exists == 'false'
         run: |
           git checkout origin/${BASE_BRANCH} -- .github/workflows || true
+
+      - name: Commit restored workflows
+        if: steps.check.outputs.exists == 'false'
+        run: |
           git add .github/workflows
           git commit -m "Restore local workflows from ${BASE_BRANCH}" || true
 
-      - name: Push branch
+      - name: Push branch to origin
         if: steps.check.outputs.exists == 'false'
         run: |
-          git push origin "upstream/${{ steps.tag.outputs.tag }}"
+          TAG=${{ steps.tag.outputs.tag }}
+          git push origin "upstream/${TAG}"
 
       - name: Create Pull Request
         if: steps.check.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          TAG=${{ steps.tag.outputs.tag }}
+
           gh pr create \
             --base "${BASE_BRANCH}" \
-            --head "upstream/${{ steps.tag.outputs.tag }}" \
-            --title "Sync upstream tag ${{ steps.tag.outputs.tag }}" \
-            --body "Automated PR syncing upstream tag **${{ steps.tag.outputs.tag }}** from ${UPSTREAM_OWNER}/${UPSTREAM_REPO}"
+            --head "upstream/${TAG}" \
+            --title "Sync upstream tag ${TAG}" \
+            --body "Automated PR syncing upstream tag **${TAG}** from ${UPSTREAM_OWNER}/${UPSTREAM_REPO}"
