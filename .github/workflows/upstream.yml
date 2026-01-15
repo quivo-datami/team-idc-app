@@ -1,4 +1,4 @@
-name: Sync upstream tag and open PR
+name: Upstream process
 
 on:
   push:
@@ -62,7 +62,6 @@ jobs:
         id: upstream_commit
         run: |
           TAG=${{ steps.tag.outputs.tag }}
-          # Correct: tags are under refs/tags/
           COMMIT_SHA=$(git rev-parse "refs/tags/${TAG}")
           if [ -z "$COMMIT_SHA" ]; then
             echo "Commit for upstream tag $TAG not found"
@@ -90,9 +89,9 @@ jobs:
           BRANCH="upstream/${TAG}"
 
           git checkout origin/${BASE_BRANCH} -b "$BRANCH"
-          git cherry-pick "$COMMIT" || true  # resolves trivial conflicts
+          git cherry-pick "$COMMIT" || true  # trivial conflicts ignored
 
-      # 8️⃣ Restore local workflows to avoid GitHub push restriction
+      # 8️⃣ Restore local workflows to avoid push restrictions
       - name: Restore local workflows from main
         if: steps.check.outputs.exists == 'false'
         run: |
@@ -105,16 +104,28 @@ jobs:
           git add .github/workflows
           git commit -m "Restore local workflows from ${BASE_BRANCH}" || true
 
-      # 🔟 Push branch to origin
-      - name: Push branch
+      # 🔟 Check if there are new commits to push
+      - name: Check for new commits
+        id: has_commits
         if: steps.check.outputs.exists == 'false'
+        run: |
+          NEW_COMMITS=$(git log origin/${BASE_BRANCH}..HEAD --oneline)
+          if [ -z "$NEW_COMMITS" ]; then
+            echo "no_new_commits=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no_new_commits=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 1️⃣1️⃣ Push branch to origin if there are commits
+      - name: Push branch
+        if: steps.check.outputs.exists == 'false' && steps.has_commits.outputs.no_new_commits == 'false'
         run: |
           TAG=${{ steps.tag.outputs.tag }}
           git push origin "upstream/${TAG}"
 
-      # 1️⃣1️⃣ Create Pull Request
+      # 1️⃣2️⃣ Create Pull Request if commits exist
       - name: Create Pull Request
-        if: steps.check.outputs.exists == 'false'
+        if: steps.check.outputs.exists == 'false' && steps.has_commits.outputs.no_new_commits == 'false'
         env:
           GH_TOKEN: ${{ secrets.UPSTREAM_SECRET }}
         run: |
