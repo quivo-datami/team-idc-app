@@ -12,8 +12,8 @@ permissions:
 
 env:
   BASE_BRANCH: main
-  UPSTREAM_OWNER: aws-samples/iam-identity-center-team
-  UPSTREAM_REPO: quivo-datami/team-idc-app
+  UPSTREAM_OWNER: aws-samples
+  UPSTREAM_REPO: iam-identity-center-team
 
 jobs:
   sync-tag:
