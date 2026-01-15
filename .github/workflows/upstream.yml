@@ -30,10 +30,22 @@ jobs:
           git remote add upstream https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git || true
           git fetch upstream --tags
 
-      - name: Extract tag name
+      - name: Resolve tag to use (push OR manual)
         id: tag
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "Triggered by tag push: $TAG"
+          else
+            TAG=$(git tag -l 'v*' --sort=-v:refname | head -n 1)
+            echo "Triggered manually, using latest tag: $TAG"
+          fi
+
+          if [ -z "$TAG" ]; then
+            echo "No v* tags found"
+            exit 1
+          fi
+
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Verify tag exists in upstream
