@@ -25,20 +25,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Add upstream remote
+      - name: Add upstream remote and fetch tags
         run: |
           git remote add upstream https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git || true
           git fetch upstream --tags
 
-      - name: Resolve tag to use (push OR manual)
+      - name: Resolve tag to use (push or manual)
         id: tag
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
-            echo "Triggered by tag push: $TAG"
           else
             TAG=$(git tag -l 'v*' --sort=-v:refname | head -n 1)
-            echo "Triggered manually, using latest tag: $TAG"
           fi
 
           if [ -z "$TAG" ]; then
@@ -51,11 +49,7 @@ jobs:
       - name: Verify tag exists in upstream
         run: |
           TAG=${{ steps.tag.outputs.tag }}
-
-          if ! git show-ref --tags --verify --quiet "refs/tags/$TAG"; then
-            echo "Tag $TAG not found in upstream"
-            exit 1
-          fi
+          git show-ref --tags --verify --quiet "refs/tags/$TAG"
 
       - name: Check if branch already exists
         id: check
@@ -72,21 +66,28 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         run: |
           TAG=${{ steps.tag.outputs.tag }}
-          BRANCH=upstream/${TAG}
+          git checkout -b "upstream/${TAG}" "refs/tags/$TAG"
 
-          git checkout -b "$BRANCH" "refs/tags/$TAG"
-          git push origin "$BRANCH"
+      # 🔐 SAFE WORKFLOW RESTORE (key fix)
+      - name: Restore local workflows from main
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          git checkout origin/${BASE_BRANCH} -- .github/workflows || true
+          git add .github/workflows
+          git commit -m "Restore local workflows from ${BASE_BRANCH}" || true
+
+      - name: Push branch
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          git push origin "upstream/${{ steps.tag.outputs.tag }}"
 
       - name: Create Pull Request
         if: steps.check.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG=${{ steps.tag.outputs.tag }}
-          BRANCH=upstream/${TAG}
-
           gh pr create \
             --base "${BASE_BRANCH}" \
-            --head "$BRANCH" \
-            --title "Sync upstream tag ${TAG}" \
-            --body "Automated PR syncing upstream tag **${TAG}** from ${UPSTREAM_OWNER}/${UPSTREAM_REPO}"
+            --head "upstream/${{ steps.tag.outputs.tag }}" \
+            --title "Sync upstream tag ${{ steps.tag.outputs.tag }}" \
+            --body "Automated PR syncing upstream tag **${{ steps.tag.outputs.tag }}** from ${UPSTREAM_OWNER}/${UPSTREAM_REPO}"
