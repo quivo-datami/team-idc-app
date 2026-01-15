@@ -16,7 +16,8 @@ The **update.sh** bash script performs the following actions:
 
 - Adds the AWS samples github repo as a git remote
 - Pulls the latest version of the TEAM code
-- Push the latest version to the TEAM code commit repo which triggers the amplify build and deployment 
+- Push the latest version to the TEAM code commit repo
+- Deploys an AWS CloudFormation stack which triggers the amplify build and deployment
 - Removes the AWS samples github repo as a git remote
 
   > Ensure that the named profile for the **TEAM Deployment account** has sufficient permissions before executing the **update.sh** script
@@ -29,15 +30,6 @@ cd deployment
 ```
 
 Once the upgrade script has completed execution, go to the AWS Amplify console to monitor the status of the TEAM application build and deployment.
-
-## If upgrading to v1.1.2 
-Due to an [ongoing issue](https://github.com/aws-samples/iam-identity-center-team/issues/236) the ***CLOUDTRAIL_AUDIT_LOGS*** parameter is no longer optional but now a mandatory parameter that accepts the ARN of an existing Cloudtrail Lake event datastore.
-
-If upgrading from v1.1.1 to v1.1.2, add the ARN of the TEAM Cloudtrail Lake organization event datastore to your paramaters.js file as shown below:
-
-```
-CLOUDTRAIL_AUDIT_LOGS=arn:aws:cloudtrail:us-east-1:123456789101:eventdatastore/e646f20d-7959-4682-be84-6c5b8a37cf15
-```
 
 
 ## Verify app deployment

@@ -68,6 +68,7 @@ export const onCreateSettings = /* GraphQL */ `
       sesNotificationsEnabled
       snsNotificationsEnabled
       slackNotificationsEnabled
+      slackAuditNotificationsChannel
       sesSourceEmail
       sesSourceArn
       slackToken
@@ -92,6 +93,7 @@ export const onUpdateSettings = /* GraphQL */ `
       sesNotificationsEnabled
       snsNotificationsEnabled
       slackNotificationsEnabled
+      slackAuditNotificationsChannel
       sesSourceEmail
       sesSourceArn
       slackToken
@@ -116,6 +118,7 @@ export const onDeleteSettings = /* GraphQL */ `
       sesNotificationsEnabled
       snsNotificationsEnabled
       slackNotificationsEnabled
+      slackAuditNotificationsChannel
       sesSourceEmail
       sesSourceArn
       slackToken
@@ -328,6 +331,7 @@ export const onPublishPolicy = /* GraphQL */ `
         duration
         __typename
       }
+      username
       __typename
     }
   }
@@ -336,6 +340,20 @@ export const onPublishOUs = /* GraphQL */ `
   subscription OnPublishOUs {
     onPublishOUs {
       ous
+      __typename
+    }
+  }
+`;
+export const onPublishPermissions = /* GraphQL */ `
+  subscription OnPublishPermissions {
+    onPublishPermissions {
+      id
+      permissions {
+        Name
+        Arn
+        Duration
+        __typename
+      }
       __typename
     }
   }

@@ -272,6 +272,7 @@ export const getSettings = /* GraphQL */ `
       sesNotificationsEnabled
       snsNotificationsEnabled
       slackNotificationsEnabled
+      slackAuditNotificationsChannel
       sesSourceEmail
       sesSourceArn
       slackToken
@@ -301,6 +302,7 @@ export const listSettings = /* GraphQL */ `
         sesNotificationsEnabled
         snsNotificationsEnabled
         slackNotificationsEnabled
+        slackAuditNotificationsChannel
         sesSourceEmail
         sesSourceArn
         slackToken
@@ -410,9 +412,13 @@ export const getOU = /* GraphQL */ `
 export const getPermissions = /* GraphQL */ `
   query GetPermissions {
     getPermissions {
-      Name
-      Arn
-      Duration
+      id
+      permissions {
+        Name
+        Arn
+        Duration
+        __typename
+      }
       __typename
     }
   }
@@ -421,16 +427,6 @@ export const getMgmtPermissions = /* GraphQL */ `
   query GetMgmtPermissions {
     getMgmtPermissions {
       permissions
-      __typename
-    }
-  }
-`;
-export const getGroups = /* GraphQL */ `
-  query GetGroups {
-    getGroups {
-      groups
-      userId
-      groupIds
       __typename
     }
   }
@@ -483,6 +479,7 @@ export const getUserPolicy = /* GraphQL */ `
         duration
         __typename
       }
+      username
       __typename
     }
   }

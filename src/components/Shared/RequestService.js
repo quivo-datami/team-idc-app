@@ -15,7 +15,6 @@ import {
   getOUs,
   getOU,
   requestByEmailAndStatus,
-  getGroups,
   getIdCGroups,
   getUsers,
   listEligibilities,
@@ -56,7 +55,7 @@ export async function fetchPermissions() {
     const data = await permissions.data.getPermissions;
     return data;
   } catch (err) {
-    console.log("error fetching permissions");
+    console.log("error fetching permissions", err);
   }
 }
 
@@ -125,16 +124,6 @@ export async function getGroupMemberships(id) {
     return data;
   } catch (err) {
     console.log("error fetching members");
-  }
-}
-
-export async function fetchGroups() {
-  try {
-    const groups = await API.graphql(graphqlOperation(getGroups));
-    const data = await groups.data.getGroups;
-    return data;
-  } catch (err) {
-    console.log("error fetching Groups");
   }
 }
 

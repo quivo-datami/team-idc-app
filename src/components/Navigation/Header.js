@@ -32,7 +32,7 @@ function Header(props) {
         visible={visible}
         onDismiss={() => setVisible(false)}
       >
-        🚀 TEAM v1.1.1 introduces support for custom domain name instead of the default amplify generated domain name.
+        🚀 TEAM v1.2.0 introduces support for the use of external repositories due to CodeCommit deprecation 
       </Alert>
     );
   }
@@ -66,8 +66,8 @@ function Header(props) {
           },
           {
             type: "button",
-            text: "v1.1.2",
-            href: "https://github.com/aws-samples/iam-identity-center-team/releases/tag/v1.1.2",
+            text: "v1.4.1",
+            href: "https://github.com/aws-samples/iam-identity-center-team/releases/tag/v1.4.1",
             external: true,
             externalIconAriaLabel: " (opens in a new tab)",
           },
