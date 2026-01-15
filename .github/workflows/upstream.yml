@@ -20,33 +20,51 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout the repo
       - name: Checkout target repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # 2️⃣ Configure Git identity for commits
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Add upstream remote and fetch tags
+      # 3️⃣ Add upstream remote and fetch tags
+      - name: Add upstream remote
         run: |
           git remote add upstream https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git || true
           git fetch upstream --tags
 
-      - name: Extract tag name
+      # 4️⃣ Extract tag name from push or pick latest v* tag
+      - name: Resolve tag to use
         id: tag
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "Triggered by tag push: $TAG"
+          else
+            TAG=$(git tag -l 'v*' --sort=-v:refname | head -n 1)
+            echo "Triggered manually, using latest tag: $TAG"
+          fi
+
+          if [ -z "$TAG" ]; then
+            echo "No v* tags found"
+            exit 1
+          fi
+
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
+      # 5️⃣ Verify tag exists in upstream
       - name: Verify tag exists in upstream
         run: |
           TAG=${{ steps.tag.outputs.tag }}
           git show-ref --tags --verify --quiet "refs/tags/$TAG"
 
-      - name: Check if branch already exists
+      # 6️⃣ Check if branch already exists
+      - name: Check if branch exists
         id: check
         run: |
           BRANCH="upstream/${{ steps.tag.outputs.tag }}"
@@ -56,39 +74,41 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # 7️⃣ Create branch from upstream tag
       - name: Create branch from upstream tag
         if: steps.check.outputs.exists == 'false'
         run: |
           TAG=${{ steps.tag.outputs.tag }}
           BRANCH="upstream/${TAG}"
-
           git checkout -b "$BRANCH" "refs/tags/$TAG"
 
-      # 🔒 CRITICAL SECURITY STEP (prevents workflow permission error)
+      # 8️⃣ Restore local workflows to prevent GitHub push errors
       - name: Restore local workflows from main
         if: steps.check.outputs.exists == 'false'
         run: |
           git checkout origin/${BASE_BRANCH} -- .github/workflows || true
 
+      # 9️⃣ Commit restored workflows
       - name: Commit restored workflows
         if: steps.check.outputs.exists == 'false'
         run: |
           git add .github/workflows
           git commit -m "Restore local workflows from ${BASE_BRANCH}" || true
 
-      - name: Push branch to origin
+      # 🔟 Push branch to origin
+      - name: Push branch
         if: steps.check.outputs.exists == 'false'
         run: |
           TAG=${{ steps.tag.outputs.tag }}
           git push origin "upstream/${TAG}"
 
+      # 1️⃣1️⃣ Create Pull Request
       - name: Create Pull Request
         if: steps.check.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=${{ steps.tag.outputs.tag }}
-
           gh pr create \
             --base "${BASE_BRANCH}" \
             --head "upstream/${TAG}" \
