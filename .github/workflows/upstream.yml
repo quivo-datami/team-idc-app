@@ -81,7 +81,7 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # 7️⃣ Create branch from main and merge upstream tag commit (force PR)
+      # 7️⃣ Create branch and merge upstream tag commit
       - name: Create branch and merge upstream tag
         if: steps.check.outputs.exists == 'false'
         run: |
@@ -89,11 +89,20 @@ jobs:
           COMMIT=${{ steps.upstream_commit.outputs.commit_sha }}
           BRANCH="upstream/${TAG}"
 
-          echo "Creating branch $BRANCH from main and merging upstream tag commit $COMMIT"
+          echo "Creating branch $BRANCH from main and merging upstream commit $COMMIT"
           git checkout origin/${BASE_BRANCH} -b "$BRANCH"
           git merge "$COMMIT" --allow-unrelated-histories -m "Sync upstream tag ${TAG}" || true
 
-      # 8️⃣ Restore workflows to prevent push errors
+          # Add dummy commit if no new commits were created
+          NEW_COMMITS=$(git log origin/${BASE_BRANCH}..HEAD --oneline)
+          if [ -z "$NEW_COMMITS" ]; then
+            echo "No new commits after merge, creating dummy commit"
+            echo "Upstream tag $TAG sync" > /tmp/dummy.txt
+            git add /tmp/dummy.txt
+            git commit -m "Dummy commit to force PR for upstream tag $TAG"
+          fi
+
+      # 8️⃣ Restore workflows
       - name: Restore workflows
         if: steps.check.outputs.exists == 'false'
         run: |
@@ -106,7 +115,7 @@ jobs:
           git add .github/workflows
           git commit -m "Restore local workflows from ${BASE_BRANCH}" || true
 
-      # 🔟 Push branch (force)
+      # 🔟 Push branch
       - name: Push branch
         if: steps.check.outputs.exists == 'false'
         run: |
