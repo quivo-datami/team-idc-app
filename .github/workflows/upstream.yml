@@ -33,7 +33,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       # 3️⃣ Add upstream remote and fetch tags
-      - name: Add upstream remote
+      - name: Add upstream remote and fetch tags
         run: |
           git remote add upstream https://github.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}.git || true
           git fetch upstream --tags
@@ -57,20 +57,18 @@ jobs:
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-
-
-      # 5️⃣ Get commit SHA of upstream tag
-      - name: Get upstream tag commit
+      # 5️⃣ Get upstream tag commit SHA
+      - name: Get upstream tag commit SHA
         id: upstream_commit
         run: |
           TAG=${{ steps.tag.outputs.tag }}
-          COMMIT_SHA=$(git rev-parse "refs/remotes/upstream/${TAG}")
+          # Correct: tags are under refs/tags/
+          COMMIT_SHA=$(git rev-parse "refs/tags/${TAG}")
           if [ -z "$COMMIT_SHA" ]; then
             echo "Commit for upstream tag $TAG not found"
             exit 1
           fi
           echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
-
 
       # 6️⃣ Check if branch already exists
       - name: Check if branch exists
@@ -92,15 +90,15 @@ jobs:
           BRANCH="upstream/${TAG}"
 
           git checkout origin/${BASE_BRANCH} -b "$BRANCH"
-          git cherry-pick "$COMMIT" || true   # in case of conflicts, can adjust
+          git cherry-pick "$COMMIT" || true  # resolves trivial conflicts
 
-      # 8️⃣ Restore local workflows to prevent push errors
+      # 8️⃣ Restore local workflows to avoid GitHub push restriction
       - name: Restore local workflows from main
         if: steps.check.outputs.exists == 'false'
         run: |
           git checkout origin/${BASE_BRANCH} -- .github/workflows || true
 
-      # 9️⃣ Commit restored workflows
+      # 9️⃣ Commit restored workflows (if needed)
       - name: Commit restored workflows
         if: steps.check.outputs.exists == 'false'
         run: |
@@ -118,7 +116,7 @@ jobs:
       - name: Create Pull Request
         if: steps.check.outputs.exists == 'false'
         env:
-          GH_TOKEN: ${{ secrets.UPSTREAM_SECRET }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=${{ steps.tag.outputs.tag }}
           gh pr create \
