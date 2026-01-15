@@ -58,11 +58,18 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
 
-      # 5️⃣ Verify tag exists in upstream
-      - name: Verify tag exists in upstream
 
+      # 5️⃣ Get commit SHA of upstream tag
+      - name: Get upstream tag commit
+        id: upstream_commit
         run: |
           TAG=${{ steps.tag.outputs.tag }}
+          COMMIT_SHA=$(git rev-parse "refs/remotes/upstream/${TAG}")
+          if [ -z "$COMMIT_SHA" ]; then
+            echo "Commit for upstream tag $TAG not found"
+            exit 1
+          fi
+          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
 
 
       # 6️⃣ Check if branch already exists
